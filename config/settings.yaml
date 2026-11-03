@@ -19,7 +19,7 @@ account:
 
 universe:
   name: NIFTY500                   # label only
-  constituents_url: https://nsearchives.nseindia.com/content/indices/ind_nifty500list.csv
+  constituents_url: https://nsearchives.nseindia.com/content/indices/ind_nifty500list.csv  # NSE's Nifty 500 constituent list (downloaded by refresh-reference)
   constituents_file: data/reference/ind_nifty500list.csv   # cached copy; edit or replace to change the universe
   extra_symbols: []                # symbols you add by hand (NSE symbols)
   exclude_symbols: []              # symbols you never want screened
@@ -36,15 +36,15 @@ data:
   turnover_price: close            # [ASSUMPTION] Upstox candles carry no traded value, so turnover ≈ price × volume using close | hlc3
 
 upstox:
-  api_base: https://api.upstox.com
-  hft_base: https://api-hft.upstox.com
-  instruments_url: https://assets.upstox.com/market-quote/instruments/exchange/NSE.json.gz
+  api_base: https://api.upstox.com  # Upstox REST base URL
+  hft_base: https://api-hft.upstox.com  # Upstox low-latency order endpoint (used only if execution.live.use_hft_endpoint)
+  instruments_url: https://assets.upstox.com/market-quote/instruments/exchange/NSE.json.gz  # Upstox instrument master (instrument keys, tick sizes)
   client_id_env: UPSTOX_API_KEY            # env var holding your app's API key
   client_secret_env: UPSTOX_API_SECRET     # env var holding your app's secret
   redirect_uri_env: UPSTOX_REDIRECT_URI    # env var holding the redirect URL registered for the app
   access_token_env: UPSTOX_ACCESS_TOKEN    # env var checked first for today's token
   token_file: .upstox_token.json           # written by `nseswing upstox-login` (gitignored). Tokens expire daily.
-  timeout_seconds: 15
+  timeout_seconds: 15              # HTTP timeout per request
   rate_limit_per_second: 20        # [VERIFY] Upstox standard APIs allow about 50/s; stay well below
   rate_limit_per_minute: 400       # [VERIFY] about 500/min
   intraday_max_days_per_request: 28    # [VERIFY] v3 minute candles: about one month per request
@@ -56,8 +56,8 @@ upstox:
     NIFTY500: "NSE_INDEX|Nifty 500"
 
 nse:
-  user_agent: "Mozilla/5.0 (compatible; nseswing/0.1)"
-  timeout_seconds: 20
+  user_agent: "Mozilla/5.0 (compatible; nseswing/0.1)"  # generic client name sent to NSE
+  timeout_seconds: 20              # HTTP timeout per request
   home_url: https://www.nseindia.com                          # visited first to obtain cookies for /api/ calls
   sec_list_url: https://nsearchives.nseindia.com/content/equities/sec_list.csv    # [VERIFY] price bands + series
   fo_list_url: https://nsearchives.nseindia.com/content/fo/fo_mktlots.csv         # [VERIFY] F&O underlyings (CAS, no fixed band)
@@ -66,26 +66,24 @@ nse:
   corporate_actions_api: https://www.nseindia.com/api/corporates-corporateActions # [VERIFY]
   holidays_api: https://www.nseindia.com/api/holiday-master?type=trading          # [VERIFY]
   preopen_api: https://www.nseindia.com/api/market-data-pre-open?key=ALL          # [VERIFY]
-  corporate_actions_lookback_days: 400
+  corporate_actions_lookback_days: 400  # calendar days of corporate actions downloaded (≥ the daily history)
 
 calendar:
   file: config/nse_calendar.yaml   # holidays + special sessions (a data file you update each December)
   fail_if_year_missing: false      # true: refuse dates in years the file does not cover; false: warn, treat weekdays as sessions
 
 sessions:
-  preopen_start: "09:00"
+  preopen_start: "09:00"           # pre-open call auction starts
   preopen_order_entry_end: "09:08" # [VERIFY] since 7 Sep 2026 order entry closes at a random moment about 09:08–09:10
   preopen_iep_final_after: "09:10" # expected open is treated as final after this time
-  preopen_end: "09:15"
-  market_open: "09:15"
-  market_close: "15:30"
+  market_open: "09:15"             # normal market (continuous trading) opens
+  market_close: "15:30"            # normal market closes (non-CAS stocks; DAY orders expire)
   cas:                             # [VERIFY] Closing Auction Session (NSE, from 3 Aug 2026)
     enabled: true
     effective_from: "2026-08-03"
     applies_to: fno_stocks         # fno_stocks | all | none
     continuous_end: "15:15"        # continuous trading ends; the exchange cancels pending SL orders
     auction_end: "15:35"           # closing price known after this
-    sl_orders_cancelled_at_transition: true
 
 corporate_actions:
   mode: auto                       # auto | always | never. auto applies a large action only if the raw series still shows its jump (no double adjustment)
@@ -108,8 +106,7 @@ ticks:
     - {max_price: 10000, max_inclusive: true,  tick: 0.50}
     - {max_price: 20000, max_inclusive: true,  tick: 1.00}
     - {max_price: null,  max_inclusive: false, tick: 5.00}
-  reference_price: last_close      # [ASSUMPTION] price that picks the slab: last_close | live (NSE reviews slabs on closing prices)
-  prefer_instrument_master: true   # use the tick from Upstox's instrument file when it is available
+  prefer_instrument_master: true   # use the tick from Upstox's instrument file when available; otherwise the slab of the last close (NSE reviews slabs on closing prices)
   rounding:
     entry: up                      # buy trigger / entry rounded up to a valid tick
     stop: down                     # long stop rounded down, so risk is never understated
@@ -117,16 +114,16 @@ ticks:
     zone: nearest                  # zone edges
 
 price_bands:
-  sec_list_file: data/reference/sec_list.csv
-  fo_list_file: data/reference/fo_mktlots.csv
+  sec_list_file: data/reference/sec_list.csv  # NSE security list with the price band per symbol
+  fo_list_file: data/reference/fo_mktlots.csv  # NSE F&O underlyings list
   fno_band_pct: 10                 # [ASSUMPTION] F&O stocks have no fixed band; this dynamic-band estimate is used when no live quote is available
   default_band_pct: 20             # [ASSUMPTION] band used when a symbol is missing from sec_list
   near_circuit_pct: 1.0            # [ASSUMPTION] "near" a circuit = within 1% of the circuit price
   locked_tolerance_ticks: 1        # a bar is "locked" at a circuit when its whole range is within this many ticks of the limit
 
 surveillance:
-  asm_file: data/reference/asm.json
-  gsm_file: data/reference/gsm.json
+  asm_file: data/reference/asm.json  # downloaded ASM report
+  gsm_file: data/reference/gsm.json  # downloaded GSM report
   manual_flags: {}                 # {SYMBOL: "your reason"} flags you add yourself
   t2t_series: [BE, BZ, BT]         # series treated as trade-for-trade
   exclude_asm: false               # option to drop ASM names (default: flag only)
@@ -140,7 +137,7 @@ screener:
     top_rank_pct: 30               # Stage 1.2 relative condition (method range 20–30)
     both_conditions_scope: same_window   # [ASSUMPTION] "meets both" = both in one window (same_window) or each in any window (any_window)
   liquidity:
-    avg_days: 50
+    avg_days: 50                   # averaging window for turnover and volume
     min_avg_turnover_cr: 10.0      # [ASSUMPTION] ₹ crore per day
     min_avg_volume: 10000          # [ASSUMPTION] shares per day
     min_price: 50.0                # [ASSUMPTION] ₹
@@ -152,7 +149,7 @@ screener:
       NIFTY PSU BANK: https://nsearchives.nseindia.com/content/indices/ind_niftypsubanklist.csv
       NIFTY REALTY: https://nsearchives.nseindia.com/content/indices/ind_niftyrealtylist.csv
       NIFTY INDIA DEFENCE: https://nsearchives.nseindia.com/content/indices/ind_niftyindiadefence_list.csv
-    custom_themes_file: config/themes.yaml
+    custom_themes_file: config/themes.yaml  # your own theme lists
     fastest_metric: ret_m1         # [ASSUMPTION] "rose fastest" = ret_m1 | ret_m3 | ret_m6 | best_rank
   weekly:                          # Stage 1.6: prior advance followed by a pullback
     lookback_weeks: 26             # [ASSUMPTION] window searched for the advance peak
@@ -190,11 +187,10 @@ levels:
   lookback_days: 120               # [ASSUMPTION] levels older than this are ignored
   gaps:
     min_gap_pct: 0.5               # [ASSUMPTION] smaller gaps are ignored
-    lookback_days: 120
-  avwap:
-    default_anchor: consolidation_high   # Stage 2.2 default anchor (the bar with the consolidation high)
+    lookback_days: 120             # how far back unfilled gaps are tracked
+  avwap:                           # default anchor: the bar that made the consolidation high (screener.daily.consolidation_lookback_days)
     price: hlc3                    # typical price used: hlc3 | ohlc4 | close
-    manual_anchors_file: config/anchors.yaml
+    manual_anchors_file: config/anchors.yaml  # your manual AVWAP anchors
     pullback_near_pct: 1.5         # [ASSUMPTION] "pulls back toward it" = low within 1.5% above AVWAP after a reclaim
   confluence:
     tolerance_pct: 1.0             # [ASSUMPTION] levels within 1% of each other form one zone
@@ -222,10 +218,9 @@ intraday:
   zone_break:
     rule: close_below              # close_below | trade_below
     tolerance_pct: 0.25            # [ASSUMPTION] broken = a bar closes 0.25% below the zone bottom with no trigger
-  max_entries_per_symbol_per_day: 1
+  max_entries_per_symbol_per_day: 1  # one entry per stock per session
   no_new_entries_after: null       # [OPTIONAL] e.g. "15:00"
   poll_seconds: 2                  # live LTP polling interval
-  candle_poll_delay_seconds: 3     # wait after a bar closes before fetching it
 
 risk:
   stop_method: day_low             # day_low | trigger_bar_low | prior_bar_low  (Stage 3.1)
@@ -270,19 +265,19 @@ costs:                             # [VERIFY] statutory rates and the Upstox tar
   brokerage:
     delivery_per_order_inr: 20.0   # Upstox delivery: ₹20 per executed order
     delivery_pct_cap: 2.5          # ... or 2.5% of order value if lower
-    intraday_per_order_inr: 20.0
-    intraday_pct_cap: 0.05
+    intraday_per_order_inr: 20.0   # Upstox intraday: ₹20 per executed order ...
+    intraday_pct_cap: 0.05         # ... or this % of order value if lower (also used for same-day CNC exits)
   stt:
-    delivery_buy_pct: 0.1
-    delivery_sell_pct: 0.1
-    intraday_sell_pct: 0.025
-    round_to_rupee: true
+    delivery_buy_pct: 0.1          # STT on delivery buys
+    delivery_sell_pct: 0.1         # STT on delivery sells
+    intraday_sell_pct: 0.025       # STT on intraday sells (applies to same-day exits of CNC buys)
+    round_to_rupee: true           # STT is rounded to the nearest rupee on contract notes
   exchange_txn_pct: 0.00297        # NSE cash market, each side (₹297 / crore)
   sebi_fee_per_crore_inr: 10.0
   ipft_per_crore_inr: 10.0         # NSE investor protection fund levy
   stamp_duty:
-    delivery_buy_pct: 0.015
-    intraday_buy_pct: 0.003
+    delivery_buy_pct: 0.015        # stamp duty on delivery buys (₹1,500 / crore)
+    intraday_buy_pct: 0.003        # stamp duty on intraday buys
   gst_pct: 18.0
   gst_applies_to: [brokerage, exchange_txn, sebi_fee, ipft, dp]
   dp_charge_per_scrip_per_sell_day_inr: 20.0   # Upstox shows ₹18.5–20 per scrip per sell day (+ GST)
@@ -296,41 +291,37 @@ execution:
   paper:
     slippage_ticks: 1              # adverse slippage on market / stop fills
     gtt_fill_model: limit_at_trigger   # limit_at_trigger (Upstox places a triggered GTT as a LIMIT order) | market
-    state_file: data/state/paper_broker.json
+    state_file: data/state/paper_broker.json  # paper orders persisted between sessions
   live:
     enabled: false                 # live switch 2 of 3
     confirm_live_trading: false    # live switch 3 of 3
     static_ip_registered: false    # [VERIFY] SEBI retail-algo framework: orders only from your registered static IP
     max_orders_per_second: 5       # [VERIFY] stay below the 10 orders/sec exchange registration threshold
-    entry_style: order_then_stop   # order_then_stop | gtt_with_stop (GTT MULTIPLE: ENTRY + STOPLOSS legs)
     entry_order_type: LIMIT        # LIMIT | MARKET
     entry_limit_buffer_ticks: 2    # limit price = trigger + 2 ticks
     stop_order_type: SL-M          # SL-M | SL
     stop_limit_buffer_pct: 0.5     # SL only: limit price this far below the trigger price
-    order_tag: nseswing
+    order_tag: nseswing            # tag attached to every order
     on_stop_failure: alert_and_flatten   # alert_and_flatten | alert
     algo_header_name: null         # [VERIFY] header your broker asks algo orders to carry (e.g. X-Algo-Name), if any
-    algo_header_value: null
+    algo_header_value: null        # value for algo_header_name
     use_hft_endpoint: false        # true: place orders via api-hft.upstox.com/v3
 
 alerts:
-  console: true
-  file: data/logs/alerts.jsonl
+  console: true                    # print alerts to the terminal
+  file: data/logs/alerts.jsonl     # JSONL log of every alert
   min_level: info                  # debug | info | warning | critical
   telegram:
-    enabled: false
-    bot_token_env: TELEGRAM_BOT_TOKEN
-    chat_id_env: TELEGRAM_CHAT_ID
+    enabled: false                 # also send alerts to Telegram
+    bot_token_env: TELEGRAM_BOT_TOKEN  # env var with the Telegram bot token
+    chat_id_env: TELEGRAM_CHAT_ID  # env var with the Telegram chat id
 
 charts:
-  output_dir: reports/charts
+  output_dir: reports/charts       # HTML reports are written here
   plotly_js: cdn                   # cdn (small files, needs internet) | inline (offline, ~4 MB each)
-  daily_bars_shown: 120
-  weekly_bars_shown: 78
-  height_px: 760
+  daily_bars_shown: 120            # sessions shown on the daily chart
+  weekly_bars_shown: 78            # weeks shown on the weekly chart
+  height_px: 760                   # daily chart height
 
 journal:
-  db_path: data/journal.sqlite
-
-display:
-  decimals: 2                      # ₹ amounts are shown with Indian digit grouping (₹10,00,000.00)
+  db_path: data/journal.sqlite     # SQLite trade journal

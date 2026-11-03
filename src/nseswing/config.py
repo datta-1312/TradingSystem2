@@ -101,14 +101,12 @@ class CasCfg(_Model):
     applies_to: Literal["fno_stocks", "all", "none"]
     continuous_end: time
     auction_end: time
-    sl_orders_cancelled_at_transition: bool
 
 
 class SessionsCfg(_Model):
     preopen_start: time
     preopen_order_entry_end: time
     preopen_iep_final_after: time
-    preopen_end: time
     market_open: time
     market_close: time
     cas: CasCfg
@@ -142,7 +140,6 @@ class TickRoundingCfg(_Model):
 
 class TicksCfg(_Model):
     table: list[TickSlab]
-    reference_price: Literal["last_close", "live"]
     prefer_instrument_master: bool
     rounding: TickRoundingCfg
 
@@ -265,7 +262,6 @@ class GapsCfg(_Model):
 
 
 class AvwapCfg(_Model):
-    default_anchor: Literal["consolidation_high"]
     price: Literal["hlc3", "ohlc4", "close"]
     manual_anchors_file: str
     pullback_near_pct: float
@@ -317,7 +313,6 @@ class IntradayCfg(_Model):
     max_entries_per_symbol_per_day: int
     no_new_entries_after: time | None
     poll_seconds: float
-    candle_poll_delay_seconds: float
 
 
 # --------------------------------------------------------------------------- risk / targets / management
@@ -434,7 +429,6 @@ class LiveCfg(_Model):
     confirm_live_trading: bool
     static_ip_registered: bool
     max_orders_per_second: float
-    entry_style: Literal["order_then_stop", "gtt_with_stop"]
     entry_order_type: Literal["LIMIT", "MARKET"]
     entry_limit_buffer_ticks: int
     stop_order_type: Literal["SL-M", "SL"]
@@ -477,10 +471,6 @@ class JournalCfg(_Model):
     db_path: str
 
 
-class DisplayCfg(_Model):
-    decimals: int
-
-
 class Settings(_Model):
     account: AccountCfg
     universe: UniverseCfg
@@ -506,7 +496,6 @@ class Settings(_Model):
     alerts: AlertsCfg
     charts: ChartsCfg
     journal: JournalCfg
-    display: DisplayCfg
 
     # ------------------------------------------------------------------ helpers
     def path(self, relative: str | Path) -> Path:

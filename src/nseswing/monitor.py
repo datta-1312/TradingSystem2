@@ -107,11 +107,19 @@ class LiveMonitor:
         while to_ist(self.clock()) < session.preopen_iep_final_after:
             self.sleep(min(30.0, (to_ist(session.preopen_iep_final_after) - to_ist(self.clock())).total_seconds()))
         quotes = self.provider.quotes(sorted(set(watch) | set(held))) if (watch or held) else {}
+        preopen = {}
+        if self.s.preopen.expected_open_source == "nse_preopen":
+            from nseswing.data.nse import fetch_preopen
+
+            try:
+                preopen = fetch_preopen(self.s)
+            except Exception as exc:  # noqa: BLE001
+                self.alerts.emit("PREOPEN_DATA", "-", f"NSE pre-open data unavailable ({exc}); using the quote", level="warning", ts=self.clock())
         for sym in watch:
             ctx = self._ctx(sym, allow_entries=sym not in held)
             if ctx is None:
                 continue
-            eo, src = expected_open(sym, ctx.level_map.last_close, self.s, quotes.get(sym))
+            eo, src = expected_open(sym, ctx.level_map.last_close, self.s, quotes.get(sym), preopen.get(sym))
             engine.add(ctx, eo, src)
         for sym in held:
             if sym not in engine.contexts:

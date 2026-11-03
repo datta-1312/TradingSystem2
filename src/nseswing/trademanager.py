@@ -174,7 +174,7 @@ class TradeManager:
         if pos is None or pos.status != "open":
             return
         day = bar.start.date().isoformat()
-        if pos.stop_order is not None and pos.stop_order.status == Status.TRIGGERED and "gtt_unfilled" not in pos.alerted:
+        if self.tm.overnight_stop.gtt_unfilled_alert and pos.stop_order is not None and pos.stop_order.status == Status.TRIGGERED and "gtt_unfilled" not in pos.alerted:
             pos.alerted.add("gtt_unfilled")
             pos.flags.add("STOP_UNFILLED")
             self.alerts.emit("STOP_UNFILLED", symbol, f"stop ₹{pos.stop} triggered but its limit order is UNFILLED (price ₹{bar.close:.2f}): exit manually", level="critical", ts=bar.start)

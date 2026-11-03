@@ -220,3 +220,9 @@ def parse_preopen(payload: dict[str, Any]) -> dict[str, PreopenInfo]:
             float(meta["pChange"]) if meta.get("pChange") not in (None, "-") else None,
         )
     return out
+
+
+def fetch_preopen(settings: "Settings", client: NseClient | None = None) -> dict[str, PreopenInfo]:
+    """NSE pre-open market data (indicative equilibrium price per symbol)."""
+    client = client or NseClient(settings)
+    return parse_preopen(client.get_json(settings.nse.preopen_api))

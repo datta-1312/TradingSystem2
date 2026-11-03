@@ -166,7 +166,15 @@ def cmd_preopen(args) -> int:
         probe = None
     from nseswing.pipeline import run_premarket
 
-    run = run_premarket(s, cal, prov, ref, _actions(s), as_of=_as_of(s, cal, args.as_of), quotes=quotes, data=probe.data if probe else None)
+    preopen = None
+    if s.preopen.expected_open_source == "nse_preopen":
+        from nseswing.data.nse import fetch_preopen
+
+        try:
+            preopen = fetch_preopen(s)
+        except Exception as exc:  # noqa: BLE001
+            print(f"note: NSE pre-open data unavailable ({exc})", file=sys.stderr)
+    run = run_premarket(s, cal, prov, ref, _actions(s), as_of=_as_of(s, cal, args.as_of), quotes=quotes, preopen=preopen, data=probe.data if probe else None)
     if not run.candidates:
         print("no watchlist stock has a support zone near the expected open")
     for c in run.candidates:

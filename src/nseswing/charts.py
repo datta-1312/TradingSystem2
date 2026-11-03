@@ -427,7 +427,7 @@ def write_report(path: Path, title: str, figures: list[go.Figure], plan: "TradeP
     parts = []
     for i, fig in enumerate(figures):
         parts.append(fig.to_html(full_html=False, include_plotlyjs=(plotly_js if i == 0 else False), config={"displaylogo": False}))
-    tbl = "".join(f"<h2>{html.escape(name)}</h2>{df.to_html(index=False, border=0, classes='data')}" for name, df in (tables or []))
+    tbl = "".join(f"<h2>{html.escape(name)}</h2><div class='scroll'>{df.to_html(index=False, border=0, classes='data')}</div>" for name, df in (tables or []))
     log = ("<h2>Rule log (IST)</h2><pre>" + html.escape("\n".join(log_lines)) + "</pre>") if log_lines else ""
     doc = f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{html.escape(title)}</title>
@@ -440,6 +440,7 @@ table {{ border-collapse:collapse; font-size:13px; }} th, td {{ text-align:left;
 table.data td {{ font-variant-numeric: tabular-nums; }} th {{ color:var(--ink2); font-weight:600; }}
 pre {{ font-size:12px; white-space:pre-wrap; color:var(--ink2); }}
 .note {{ color:var(--ink2); font-size:13px; }}
+.scroll {{ overflow-x:auto; }}
 </style></head><body>
 <h1>{html.escape(title)}</h1><p class="note">Decision support only, not financial advice. Charts support your review; they do not replace it.</p>
 {_plan_html(plan) if plan is not None else ''}
