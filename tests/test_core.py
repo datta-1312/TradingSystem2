@@ -157,3 +157,13 @@ def test_missing_year_warns_or_fails(settings, caplog):
     strict = NSECalendar.from_settings(load_settings(overrides={"calendar": {"fail_if_year_missing": True}}))
     with pytest.raises(CalendarYearMissing):
         strict.is_trading_day(date(2027, 1, 4))
+
+
+def test_numpy_scalars_convert_cleanly():
+    import numpy as np
+
+    from nseswing.core.money import format_inr
+
+    assert to_decimal(np.float64(494.25750000000005)) == D("494.2575")
+    assert to_decimal(np.int64(5)) == D("5")
+    assert format_inr(np.float64(200000.0), 0) == "₹2,00,000"

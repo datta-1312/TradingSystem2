@@ -27,9 +27,12 @@ def to_decimal(value: float | int | str | Decimal) -> Decimal:
     """Convert a price to Decimal, removing float noise beyond 6 decimals."""
     if isinstance(value, Decimal):
         return value
-    if isinstance(value, float):
-        return Decimal(repr(round(value, 6)))
-    return Decimal(str(value))
+    if isinstance(value, str):
+        return Decimal(value.strip())
+    if isinstance(value, int) and not isinstance(value, bool):
+        return Decimal(value)
+    # floats, including numpy scalars (whose repr is "np.float64(...)" in numpy 2)
+    return Decimal(repr(round(float(value), 6)))
 
 
 def round_to_tick(price: float | Decimal, tick: Decimal, mode: RoundMode) -> Decimal:

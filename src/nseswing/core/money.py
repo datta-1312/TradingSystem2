@@ -16,9 +16,11 @@ CRORE = Decimal("10000000")
 def _to_dec(value: float | int | str | Decimal) -> Decimal:
     if isinstance(value, Decimal):
         return value
-    if isinstance(value, float):
-        return Decimal(repr(value))
-    return Decimal(str(value))
+    if isinstance(value, str):
+        return Decimal(value.strip())
+    if isinstance(value, int) and not isinstance(value, bool):
+        return Decimal(value)
+    return Decimal(repr(float(value)))  # floats incl. numpy scalars
 
 
 def group_indian(digits: str) -> str:
