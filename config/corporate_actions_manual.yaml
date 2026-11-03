@@ -1,0 +1,7 @@
+# Corporate actions the NSE text cannot express as a simple ratio (for example
+# demergers), or corrections you want to force. price_factor multiplies every bar
+# BEFORE ex_date; volume_factor multiplies their volume.
+#
+# actions:
+#   - {symbol: XYZ, ex_date: 2026-04-01, kind: demerger, price_factor: 0.82, volume_factor: 1.0, note: "cost of acquisition split 82:18"}
+actions: []

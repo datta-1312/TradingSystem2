@@ -1,0 +1,8 @@
+# Manual AVWAP anchors (Stage 2.2). These are added to the default anchor (the bar
+# that made the consolidation high). A daily anchor starts on that session's bar.
+#
+# anchors:
+#   RELIANCE:
+#     - {date: 2026-09-12, label: "Breakout day"}
+#     - {date: 2026-10-05, label: "Earnings gap"}
+anchors: {}

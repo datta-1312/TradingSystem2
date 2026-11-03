@@ -1,0 +1,81 @@
+# NSE capital-market (equity cash) trading calendar. This is a DATA file: update it
+# every December when NSE publishes the next year's holiday circular, and whenever
+# NSE announces a special session. `nseswing refresh-reference` can also pull the
+# holiday list from NSE's holiday API and print the differences.
+#
+# [VERIFY] 2026 dates follow NSE circular NSE/CMTR/71775 (12 Dec 2025) as reported
+# by brokers, plus 15 Jan 2026 (Maharashtra municipal elections, reported as
+# NSE/CMTR/72260). Bakri Id (28 May) and Dussehra (20 Oct) were not confirmed
+# from a primary source when this file was written. Check:
+# https://www.nseindia.com/resources/exchange-communication-holidays
+#
+# A date listed under special_sessions is a trading session even if it is a
+# weekend or also listed as a holiday (e.g. Muhurat trading on Diwali).
+
+years_covered: [2025, 2026]
+
+holidays:
+  # ---- 2025 ----
+  - {date: 2025-02-26, name: Mahashivratri}
+  - {date: 2025-03-14, name: Holi}
+  - {date: 2025-03-31, name: "Id-Ul-Fitr (Ramadan Eid)"}
+  - {date: 2025-04-10, name: Shri Mahavir Jayanti}
+  - {date: 2025-04-14, name: Dr. Baba Saheb Ambedkar Jayanti}
+  - {date: 2025-04-18, name: Good Friday}
+  - {date: 2025-05-01, name: Maharashtra Day}
+  - {date: 2025-08-15, name: Independence Day}
+  - {date: 2025-08-27, name: Ganesh Chaturthi}
+  - {date: 2025-10-02, name: "Mahatma Gandhi Jayanti / Dussehra"}
+  - {date: 2025-10-21, name: Diwali Laxmi Pujan}
+  - {date: 2025-10-22, name: Diwali Balipratipada}
+  - {date: 2025-11-05, name: Prakash Gurpurb Sri Guru Nanak Dev}
+  - {date: 2025-12-25, name: Christmas}
+  # ---- 2026 (weekday closures) ----
+  - {date: 2026-01-15, name: Municipal Corporation elections in Maharashtra}
+  - {date: 2026-01-26, name: Republic Day}
+  - {date: 2026-03-03, name: Holi}
+  - {date: 2026-03-26, name: Shri Ram Navami}
+  - {date: 2026-03-31, name: Shri Mahavir Jayanti}
+  - {date: 2026-04-03, name: Good Friday}
+  - {date: 2026-04-14, name: Dr. Baba Saheb Ambedkar Jayanti}
+  - {date: 2026-05-01, name: Maharashtra Day}
+  - {date: 2026-05-28, name: Bakri Id}
+  - {date: 2026-06-26, name: Muharram}
+  - {date: 2026-09-14, name: Ganesh Chaturthi}
+  - {date: 2026-10-02, name: Mahatma Gandhi Jayanti}
+  - {date: 2026-10-20, name: Dussehra}
+  - {date: 2026-11-10, name: Diwali Balipratipada}
+  - {date: 2026-11-24, name: Prakash Gurpurb Sri Guru Nanak Dev}
+  - {date: 2026-12-25, name: Christmas}
+  # ---- 2026 holidays that fall on a weekend (listed for completeness) ----
+  - {date: 2026-02-15, name: Mahashivratri}
+  - {date: 2026-03-21, name: Id-Ul-Fitr}
+  - {date: 2026-08-15, name: Independence Day}
+  - {date: 2026-11-08, name: Diwali Laxmi Pujan}
+
+special_sessions:
+  # Times are IST. cas_continuous_end applies to CAS (F&O) stocks; null = no CAS that day.
+  - date: 2025-02-01
+    name: Union Budget (Saturday live session)
+    preopen_start: "09:00"
+    market_open: "09:15"
+    market_close: "15:30"
+    cas_continuous_end: null
+  - date: 2025-10-21
+    name: Muhurat trading
+    preopen_start: "13:30"
+    market_open: "13:45"
+    market_close: "14:45"
+    cas_continuous_end: null
+  - date: 2026-02-01
+    name: Union Budget (Sunday live session)
+    preopen_start: "09:00"
+    market_open: "09:15"
+    market_close: "15:30"
+    cas_continuous_end: null
+  - date: 2026-11-08
+    name: Muhurat trading (Sunday)   # [VERIFY] reported 14:20–15:30 continuous; CAS stocks until 15:15
+    preopen_start: "14:05"
+    market_open: "14:20"
+    market_close: "15:30"
+    cas_continuous_end: "15:15"

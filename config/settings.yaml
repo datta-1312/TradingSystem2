@@ -1,0 +1,336 @@
+# =============================================================================
+# nseswing settings: the ONE file holding every parameter, assumption, cost rate
+# and the tick table. Every key is required (the code has no hidden defaults);
+# an unknown or misspelled key stops the program at startup.
+#
+#   [ASSUMPTION]  turns a qualitative rule of the method into a number. Tune it.
+#   [OPTIONAL]    not part of the method; off by default.
+#   [VERIFY]      exchange / broker / tax fact. Re-check it periodically.
+#
+# Lookbacks are NSE trading days (one daily bar = one session). Prices in INR,
+# times in IST (Asia/Kolkata). Percent values are written as percent (0.5 = 0.5%).
+# =============================================================================
+
+account:
+  equity_inr: 1000000              # account equity used for risk sizing (₹10,00,000)
+  risk_per_trade_pct: 0.5          # Stage 3.3: % of equity you accept losing per trade
+  available_cash_inr: null         # cash for new CNC buys; null = same as equity
+  product: CNC                     # CNC (delivery, Upstox "D") | MIS (intraday, Upstox "I"). The method holds overnight, so CNC.
+
+universe:
+  name: NIFTY500                   # label only
+  constituents_url: https://nsearchives.nseindia.com/content/indices/ind_nifty500list.csv
+  constituents_file: data/reference/ind_nifty500list.csv   # cached copy; edit or replace to change the universe
+  extra_symbols: []                # symbols you add by hand (NSE symbols)
+  exclude_symbols: []              # symbols you never want screened
+  series_allowed: [EQ, BE, BZ]     # BE/BZ (trade-for-trade) are kept and flagged, see surveillance.*
+
+data:
+  provider: upstox                 # upstox | csv  (csv = local files; used by replay, tests and the demo)
+  csv_dir: data/csv                # csv layout: daily/<SYMBOL>.csv and intraday/<SYMBOL>/<YYYY-MM-DD>_1min.csv
+  cache_dir: data/cache            # downloaded candles are cached here
+  reference_dir: data/reference    # downloaded NSE / Upstox reference files
+  state_dir: data/state            # broken zones, paper-broker state
+  daily_history_trading_days: 300  # bars fetched per stock (≥ 126 for 6M return + EMA50 / 50-day turnover warm-up)
+  min_history_trading_days: 140    # stocks with fewer bars are skipped, with the reason shown
+  turnover_price: close            # [ASSUMPTION] Upstox candles carry no traded value, so turnover ≈ price × volume using close | hlc3
+
+upstox:
+  api_base: https://api.upstox.com
+  hft_base: https://api-hft.upstox.com
+  instruments_url: https://assets.upstox.com/market-quote/instruments/exchange/NSE.json.gz
+  client_id_env: UPSTOX_API_KEY            # env var holding your app's API key
+  client_secret_env: UPSTOX_API_SECRET     # env var holding your app's secret
+  redirect_uri_env: UPSTOX_REDIRECT_URI    # env var holding the redirect URL registered for the app
+  access_token_env: UPSTOX_ACCESS_TOKEN    # env var checked first for today's token
+  token_file: .upstox_token.json           # written by `nseswing upstox-login` (gitignored). Tokens expire daily.
+  timeout_seconds: 15
+  rate_limit_per_second: 20        # [VERIFY] Upstox standard APIs allow about 50/s; stay well below
+  rate_limit_per_minute: 400       # [VERIFY] about 500/min
+  intraday_max_days_per_request: 28    # [VERIFY] v3 minute candles: about one month per request
+  daily_max_days_per_request: 3650     # [VERIFY] v3 day candles: about ten years per request
+  quote_batch_size: 200            # instrument keys per quote/LTP request (API limit 500)
+  instrument_tick_unit: auto       # [VERIFY] tick_size in the instrument file: rupees | paise | auto (pick the reading that fits the tick table)
+  index_keys:                      # benchmark instrument keys (hold-full override hint)
+    NIFTY50: "NSE_INDEX|Nifty 50"
+    NIFTY500: "NSE_INDEX|Nifty 500"
+
+nse:
+  user_agent: "Mozilla/5.0 (compatible; nseswing/0.1)"
+  timeout_seconds: 20
+  home_url: https://www.nseindia.com                          # visited first to obtain cookies for /api/ calls
+  sec_list_url: https://nsearchives.nseindia.com/content/equities/sec_list.csv    # [VERIFY] price bands + series
+  fo_list_url: https://nsearchives.nseindia.com/content/fo/fo_mktlots.csv         # [VERIFY] F&O underlyings (CAS, no fixed band)
+  asm_api: https://www.nseindia.com/api/reportASM                                 # [VERIFY]
+  gsm_api: https://www.nseindia.com/api/reportGSM                                 # [VERIFY]
+  corporate_actions_api: https://www.nseindia.com/api/corporates-corporateActions # [VERIFY]
+  holidays_api: https://www.nseindia.com/api/holiday-master?type=trading          # [VERIFY]
+  preopen_api: https://www.nseindia.com/api/market-data-pre-open?key=ALL          # [VERIFY]
+  corporate_actions_lookback_days: 400
+
+calendar:
+  file: config/nse_calendar.yaml   # holidays + special sessions (a data file you update each December)
+  fail_if_year_missing: false      # true: refuse dates in years the file does not cover; false: warn, treat weekdays as sessions
+
+sessions:
+  preopen_start: "09:00"
+  preopen_order_entry_end: "09:08" # [VERIFY] since 7 Sep 2026 order entry closes at a random moment about 09:08–09:10
+  preopen_iep_final_after: "09:10" # expected open is treated as final after this time
+  preopen_end: "09:15"
+  market_open: "09:15"
+  market_close: "15:30"
+  cas:                             # [VERIFY] Closing Auction Session (NSE, from 3 Aug 2026)
+    enabled: true
+    effective_from: "2026-08-03"
+    applies_to: fno_stocks         # fno_stocks | all | none
+    continuous_end: "15:15"        # continuous trading ends; the exchange cancels pending SL orders
+    auction_end: "15:35"           # closing price known after this
+    sl_orders_cancelled_at_transition: true
+
+corporate_actions:
+  mode: auto                       # auto | always | never. auto applies a large action only if the raw series still shows its jump (no double adjustment)
+  verify_min_jump_pct: 15          # [ASSUMPTION] actions moving price ≥ 15% are verified against the raw prev-close → open jump
+  adjust_rights: true              # rights issues adjusted with the theoretical ex-rights price
+  adjust_dividends: large_only     # none | all | large_only
+  large_dividend_min_pct: 5.0      # [ASSUMPTION] a dividend ≥ 5% of the cum price is "large"
+  adjust_volume: true              # volume × 1/factor for splits, bonuses and consolidations
+  unexplained_gap_warn_pct: 45     # [ASSUMPTION] warn on an overnight drop ≥ 45% with no recorded action (possible unadjusted split)
+  actions_file: data/reference/corporate_actions.json   # downloaded from NSE by `nseswing refresh-reference`
+  manual_actions_file: config/corporate_actions_manual.yaml  # demergers etc. with a factor you supply
+
+ticks:
+  # [VERIFY] NSE price-slab tick sizes (revision effective 15 Apr 2025). A slab applies while
+  # price < max_price (or <= when max_inclusive is true). The last slab has max_price: null.
+  table:
+    - {max_price: 250,   max_inclusive: false, tick: 0.01}
+    - {max_price: 1000,  max_inclusive: true,  tick: 0.05}
+    - {max_price: 5000,  max_inclusive: true,  tick: 0.10}
+    - {max_price: 10000, max_inclusive: true,  tick: 0.50}
+    - {max_price: 20000, max_inclusive: true,  tick: 1.00}
+    - {max_price: null,  max_inclusive: false, tick: 5.00}
+  reference_price: last_close      # [ASSUMPTION] price that picks the slab: last_close | live (NSE reviews slabs on closing prices)
+  prefer_instrument_master: true   # use the tick from Upstox's instrument file when it is available
+  rounding:
+    entry: up                      # buy trigger / entry rounded up to a valid tick
+    stop: down                     # long stop rounded down, so risk is never understated
+    target: down                   # sell targets rounded down, so they are reachable
+    zone: nearest                  # zone edges
+
+price_bands:
+  sec_list_file: data/reference/sec_list.csv
+  fo_list_file: data/reference/fo_mktlots.csv
+  fno_band_pct: 10                 # [ASSUMPTION] F&O stocks have no fixed band; this dynamic-band estimate is used when no live quote is available
+  default_band_pct: 20             # [ASSUMPTION] band used when a symbol is missing from sec_list
+  near_circuit_pct: 1.0            # [ASSUMPTION] "near" a circuit = within 1% of the circuit price
+  locked_tolerance_ticks: 1        # a bar is "locked" at a circuit when its whole range is within this many ticks of the limit
+
+surveillance:
+  asm_file: data/reference/asm.json
+  gsm_file: data/reference/gsm.json
+  manual_flags: {}                 # {SYMBOL: "your reason"} flags you add yourself
+  t2t_series: [BE, BZ, BT]         # series treated as trade-for-trade
+  exclude_asm: false               # option to drop ASM names (default: flag only)
+  exclude_gsm: false               # option to drop GSM names (default: flag only)
+  exclude_t2t: false               # option to drop trade-for-trade names (default: flag only)
+
+screener:
+  return_windows: {m1: 21, m3: 63, m6: 126}   # Stage 1.1, trading days
+  momentum:
+    min_return_pct: 30             # Stage 1.2 absolute condition
+    top_rank_pct: 30               # Stage 1.2 relative condition (method range 20–30)
+    both_conditions_scope: same_window   # [ASSUMPTION] "meets both" = both in one window (same_window) or each in any window (any_window)
+  liquidity:
+    avg_days: 50
+    min_avg_turnover_cr: 10.0      # [ASSUMPTION] ₹ crore per day
+    min_avg_volume: 10000          # [ASSUMPTION] shares per day
+    min_price: 50.0                # [ASSUMPTION] ₹
+  themes:
+    min_members_hot: 3             # Stage 1.5: a group is hot when ≥ 3 members passed step 2
+    use_industry: true             # group by the NSE industry column of the constituent list
+    index_themes:                  # [VERIFY file names] thematic index → constituent CSV
+      NIFTY IT: https://nsearchives.nseindia.com/content/indices/ind_niftyitlist.csv
+      NIFTY PSU BANK: https://nsearchives.nseindia.com/content/indices/ind_niftypsubanklist.csv
+      NIFTY REALTY: https://nsearchives.nseindia.com/content/indices/ind_niftyrealtylist.csv
+      NIFTY INDIA DEFENCE: https://nsearchives.nseindia.com/content/indices/ind_niftyindiadefence_list.csv
+    custom_themes_file: config/themes.yaml
+    fastest_metric: ret_m1         # [ASSUMPTION] "rose fastest" = ret_m1 | ret_m3 | ret_m6 | best_rank
+  weekly:                          # Stage 1.6: prior advance followed by a pullback
+    lookback_weeks: 26             # [ASSUMPTION] window searched for the advance peak
+    advance_lookback_weeks: 26     # [ASSUMPTION] how far before the peak the advance may start
+    min_advance_pct: 20            # [ASSUMPTION] lowest low → peak gain
+    min_pullback_pct: 5            # [ASSUMPTION] peak → lowest low after the peak
+    min_weeks_since_peak: 1        # [ASSUMPTION] the peak is not in the current week
+    max_pullback_of_advance_pct: null   # [OPTIONAL] cap retracement as % of the advance (null = off)
+  daily:                           # Stage 1.7 consolidation checks
+    consolidation_lookback_days: 60    # [ASSUMPTION] consolidation high = highest high in this window
+    min_base_days: 5               # [ASSUMPTION] that high must be at least this many bars old
+    swing_lookaround: 3            # [ASSUMPTION] swing low/high = lowest/highest bar within ±3 bars
+    use_provisional_last_low: false    # [OPTIONAL] also count the latest, not yet confirmed, low
+    contraction:                   # 7b
+      method: atr_ratio            # atr_ratio | swing_amplitude
+      recent_days: 10              # [ASSUMPTION]
+      max_ratio: 0.80              # [ASSUMPTION] recent average true range % ≤ 0.80 × the earlier part of the base
+      min_earlier_days: 5          # earlier part needs ≥ 5 bars ...
+      fallback_earlier_days: 20    # ... otherwise compare with the 20 bars before the recent window
+    ema_reclaim:                   # 7c
+      emas: [9, 21]
+      require_prior_close_below: true  # [ASSUMPTION] "reclaimed" = close above now, after a close below within the lookback
+      reclaim_lookback_days: 15
+      slope_days: 5
+      min_slope_pct_per_day: -0.05     # [ASSUMPTION] "flat or turning up"
+  disqualify:                      # Stage 1.8
+    swing_count: 2                 # compare the last 2 swing highs and the last 2 swing lows
+    emas: [21, 50]                 # [ASSUMPTION] the "moving averages" price stays below
+    below_days: 5                  # [ASSUMPTION] "stays below" = every close of the last 5 days below both
+  rank_order: [all_checks_pass, in_hot_group, both_conditions, fastest]   # watchlist sort keys, in order
+
+levels:
+  emas: [9, 21, 50]                # Stage 2.1
+  swing_lookaround: 3              # [ASSUMPTION] prior swing highs/lows
+  lookback_days: 120               # [ASSUMPTION] levels older than this are ignored
+  gaps:
+    min_gap_pct: 0.5               # [ASSUMPTION] smaller gaps are ignored
+    lookback_days: 120
+  avwap:
+    default_anchor: consolidation_high   # Stage 2.2 default anchor (the bar with the consolidation high)
+    price: hlc3                    # typical price used: hlc3 | ohlc4 | close
+    manual_anchors_file: config/anchors.yaml
+    pullback_near_pct: 1.5         # [ASSUMPTION] "pulls back toward it" = low within 1.5% above AVWAP after a reclaim
+  confluence:
+    tolerance_pct: 1.0             # [ASSUMPTION] levels within 1% of each other form one zone
+    zone_pad_pct: 0.15             # [ASSUMPTION] zone edges padded by 0.15%
+    search_below_pct: 12           # zones considered from 12% below ...
+    search_above_pct: 1            # ... to 1% above the last close
+    high_priority_requires: [avwap, ema21, prior_high]   # Stage 2.3 high-priority recipe
+    medium_priority_min_types: 2   # [ASSUMPTION] ≥ 2 different level types = medium priority
+  retest:
+    touch_tolerance_pct: 0.3       # [ASSUMPTION] a "touch" = low within 0.3% above the level
+    important_swing_lookaround: 5  # [ASSUMPTION] "important" prior highs use ±5 bars
+  broken_zone_memory_days: 10      # [ASSUMPTION] a broken zone stays marked for 10 sessions unless price closes back above it
+
+preopen:
+  expected_open_source: upstox_quote   # upstox_quote | nse_preopen | prev_close
+  near_zone_pct: 3.0               # [ASSUMPTION] list a stock when its zone top is within 3% below the expected open (or the open is inside the zone)
+  gap_below_zone_marks_broken: true    # [ASSUMPTION] opening below a zone counts as "broke straight through"
+
+intraday:
+  timeframe_minutes: 5             # 1 | 5 | 15: monitored intraday chart
+  approach_pct: 1.0                # [ASSUMPTION] start monitoring when price is within 1% above a zone top
+  trigger_offset_ticks: 1          # "trades above the previous bar's high" = that high + 1 tick
+  evaluation: intrabar             # intrabar (fires on the first trade above) | bar_close
+  at_zone_max_distance_pct: 1.0    # [ASSUMPTION] "at the zone" = trigger price ≤ zone top + 1%
+  zone_break:
+    rule: close_below              # close_below | trade_below
+    tolerance_pct: 0.25            # [ASSUMPTION] broken = a bar closes 0.25% below the zone bottom with no trigger
+  max_entries_per_symbol_per_day: 1
+  no_new_entries_after: null       # [OPTIONAL] e.g. "15:00"
+  poll_seconds: 2                  # live LTP polling interval
+  candle_poll_delay_seconds: 3     # wait after a bar closes before fetching it
+
+risk:
+  stop_method: day_low             # day_low | trigger_bar_low | prior_bar_low  (Stage 3.1)
+  stop_buffer_ticks: 0             # [OPTIONAL] place the stop N ticks below the chosen low
+  max_stop_pct_warn: 3.0           # Stage 3.2: warn (do not block) above this
+  typical_stop_pct_min: 2.5        # shown as information when the stop is tighter than the usual 2.5–3%
+  cap_to_available_cash: true      # CNC has no leverage: shares are capped by available cash
+  max_position_pct: null           # [OPTIONAL] cap position value as % of equity
+
+targets:
+  r_multiples: [1, 3, 5]           # Stage 4.1 targets shown on every plan
+
+trade_management:
+  partials:                        # Stage 4.2: "a portion" near 3R and/or 5R. Fractions of the ORIGINAL quantity.
+    - {at_r: 3, fraction: 0.33}
+    - {at_r: 5, fraction: 0.33}
+  near_target_pct: 0.5             # alert when price is within 0.5% of a target
+  trail:                           # Stage 4.3
+    rule: close_below_ema          # close_below_ema | close_below_prev_low
+    ema: 9
+    activation: first_target       # [ASSUMPTION] first_target = trail once 3R is reached ("the rest") | entry
+    exit_timing: next_open         # next_open | same_close
+  extension:                       # Stage 4.4
+    pct_above_ema: 10.0            # [ASSUMPTION] stretched = close ≥ 10% above the 9 EMA ...
+    atr_multiple: 3.0              # [ASSUMPTION] ... or ≥ 3 ATR above it
+    atr_period: 14
+    ema: 9
+    mode: either                   # either | both | pct | atr
+  upper_circuit_near_pct: 1.0      # flag positions within 1% of the upper circuit
+  hold_full_override:              # Stage 4.5 (manual; the system only shows a hint)
+    allowed: true
+    benchmark: NIFTY50
+    market_strong_ema: 21          # [ASSUMPTION] strong market = benchmark close > its 21 EMA and that EMA's slope ≥ 0
+    min_cushion_r: 1.0             # [ASSUMPTION] every other open position is up ≥ 1R
+  move_stop_to_breakeven_after_first_partial: false   # [OPTIONAL]
+  overnight_stop:
+    method: gtt                    # gtt | replace_next_morning
+    replace_time: "09:15"          # SL orders are not accepted in the pre-open call auction
+    gtt_unfilled_alert: true       # alert when a triggered GTT limit order sits unfilled
+
+costs:                             # [VERIFY] statutory rates and the Upstox tariff; check against your contract note
+  brokerage:
+    delivery_per_order_inr: 20.0   # Upstox delivery: ₹20 per executed order
+    delivery_pct_cap: 2.5          # ... or 2.5% of order value if lower
+    intraday_per_order_inr: 20.0
+    intraday_pct_cap: 0.05
+  stt:
+    delivery_buy_pct: 0.1
+    delivery_sell_pct: 0.1
+    intraday_sell_pct: 0.025
+    round_to_rupee: true
+  exchange_txn_pct: 0.00297        # NSE cash market, each side (₹297 / crore)
+  sebi_fee_per_crore_inr: 10.0
+  ipft_per_crore_inr: 10.0         # NSE investor protection fund levy
+  stamp_duty:
+    delivery_buy_pct: 0.015
+    intraday_buy_pct: 0.003
+  gst_pct: 18.0
+  gst_applies_to: [brokerage, exchange_txn, sebi_fee, ipft, dp]
+  dp_charge_per_scrip_per_sell_day_inr: 20.0   # Upstox shows ₹18.5–20 per scrip per sell day (+ GST)
+  dp_on_btst_sell: false           # [ASSUMPTION] no DP charge when shares are sold before the T+1 credit
+
+settlement:
+  cycle_days: 1                    # T+1 rolling settlement
+
+execution:
+  mode: paper                      # alerts | paper | live. No live orders unless all three live switches are on.
+  paper:
+    slippage_ticks: 1              # adverse slippage on market / stop fills
+    gtt_fill_model: limit_at_trigger   # limit_at_trigger (Upstox places a triggered GTT as a LIMIT order) | market
+    state_file: data/state/paper_broker.json
+  live:
+    enabled: false                 # live switch 2 of 3
+    confirm_live_trading: false    # live switch 3 of 3
+    static_ip_registered: false    # [VERIFY] SEBI retail-algo framework: orders only from your registered static IP
+    max_orders_per_second: 5       # [VERIFY] stay below the 10 orders/sec exchange registration threshold
+    entry_style: order_then_stop   # order_then_stop | gtt_with_stop (GTT MULTIPLE: ENTRY + STOPLOSS legs)
+    entry_order_type: LIMIT        # LIMIT | MARKET
+    entry_limit_buffer_ticks: 2    # limit price = trigger + 2 ticks
+    stop_order_type: SL-M          # SL-M | SL
+    stop_limit_buffer_pct: 0.5     # SL only: limit price this far below the trigger price
+    order_tag: nseswing
+    on_stop_failure: alert_and_flatten   # alert_and_flatten | alert
+    algo_header_name: null         # [VERIFY] header your broker asks algo orders to carry (e.g. X-Algo-Name), if any
+    algo_header_value: null
+    use_hft_endpoint: false        # true: place orders via api-hft.upstox.com/v3
+
+alerts:
+  console: true
+  file: data/logs/alerts.jsonl
+  min_level: info                  # debug | info | warning | critical
+  telegram:
+    enabled: false
+    bot_token_env: TELEGRAM_BOT_TOKEN
+    chat_id_env: TELEGRAM_CHAT_ID
+
+charts:
+  output_dir: reports/charts
+  plotly_js: cdn                   # cdn (small files, needs internet) | inline (offline, ~4 MB each)
+  daily_bars_shown: 160
+  weekly_bars_shown: 78
+  height_px: 760
+
+journal:
+  db_path: data/journal.sqlite
+
+display:
+  decimals: 2                      # ₹ amounts are shown with Indian digit grouping (₹10,00,000.00)

@@ -1,0 +1,9 @@
+# Custom theme lists you maintain (Stage 1.5). Each theme is a group for hot-theme
+# detection, alongside the NSE industry and the thematic indices in settings.yaml.
+# Use NSE symbols. Symbols outside the universe are ignored. These are examples:
+# edit them freely.
+themes:
+  Defence and Aerospace: [HAL, BEL, BDL, MAZDOCK, COCHINSHIP, GRSE, DATAPATTNS, BEML, SOLARINDS]
+  Power T&D and Capex: [ABB, SIEMENS, CGPOWER, BHEL, POWERINDIA, KEC, APARINDS, TRITURBINE]
+  Electronics Manufacturing: [DIXON, KAYNES, SYRMA, AMBER, PGEL]
+  Railways: [IRFC, RVNL, IRCON, RAILTEL, TITAGARH, JWL, IRCTC]
