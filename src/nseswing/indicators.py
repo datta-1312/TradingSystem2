@@ -160,6 +160,20 @@ def avwap(df: pd.DataFrame, anchor_pos: int, how: Literal["hlc3", "ohlc4", "clos
     return out
 
 
+def avwap_intraday(daily_before: pd.DataFrame, anchor_pos: int, intraday: pd.DataFrame, how: Literal["hlc3", "ohlc4", "close"] = "hlc3") -> pd.Series:
+    """Carry a daily-anchored AVWAP through today's intraday bars.
+
+    ``daily_before`` holds the sessions up to yesterday (the anchor bar included);
+    today's bars then add their own price × volume to the running totals.
+    """
+    hist = daily_before.iloc[anchor_pos:]
+    base_pv = float((typical_price(hist, how) * hist["volume"].astype(float)).sum())
+    base_v = float(hist["volume"].astype(float).sum())
+    tp = typical_price(intraday, how)
+    vol = intraday["volume"].astype(float)
+    return (base_pv + (tp * vol).cumsum()) / (base_v + vol.cumsum())
+
+
 def avwap_state(
     close: pd.Series, low: pd.Series, vwap: pd.Series, near_pct: float
 ) -> dict[str, object]:

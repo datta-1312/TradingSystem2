@@ -70,6 +70,9 @@ class ReplayResult:
     journal: Journal
     compliance: dict[str, str]
     notes: list[str] = field(default_factory=list)
+    trigger_events: list = field(default_factory=list)
+    circuit: object | None = None
+    history: pd.DataFrame | None = None  # daily bars before the replay day
 
     def log_lines(self) -> list[str]:
         return [a.line() for a in sorted(self.alerts, key=lambda a: a.ts)]
@@ -222,6 +225,7 @@ class ReplayEngine:
         return ReplayResult(
             symbol, day, s.intraday.timeframe_minutes, row, lm, intraday, managed, alerts.alerts, plan,
             engine.drafts.get(symbol), tm.positions.get(symbol), journal, compliance, notes,
+            engine.trigger_events, circuit, hist,
         )
 
 

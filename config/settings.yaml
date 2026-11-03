@@ -325,7 +325,7 @@ alerts:
 charts:
   output_dir: reports/charts
   plotly_js: cdn                   # cdn (small files, needs internet) | inline (offline, ~4 MB each)
-  daily_bars_shown: 160
+  daily_bars_shown: 120
   weekly_bars_shown: 78
   height_px: 760
 
