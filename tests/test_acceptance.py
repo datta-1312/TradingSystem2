@@ -134,3 +134,55 @@ def test_acceptance_stop_rounded_to_tick_before_shares(settings):
     assert p.stop == D("490.00")
     assert p.risk_per_share == D("10.00")
     assert p.shares == 500  # unrounded risk ₹9.97 would have given 501 shares
+
+
+# ------------------------------------------------------------------ 6. overnight stop for delivery positions
+def _rig(calendar, **overrides):
+    from decimal import Decimal as D
+
+    from nseswing.alerts import AlertBus
+    from nseswing.config import load_settings
+    from nseswing.orders.base import OrderManager
+    from nseswing.orders.paper import PaperBroker
+    from nseswing.risk import RiskCalculator
+    from nseswing.trademanager import TradeManager
+
+    s = load_settings(overrides=overrides) if overrides else load_settings()
+    alerts = AlertBus(s, console=False, file=None)
+    broker = PaperBroker(s)
+    tm = TradeManager(s, OrderManager(s, broker, alerts), alerts, calendar)
+    plan = RiskCalculator(s).plan("ACC", D("500.00"), D("487.50"), tick=D("0.05"))
+    tm.enter(plan, pd.Timestamp("2026-11-03 10:05", tz="Asia/Kolkata"), D("500.00"), cas_stock=False)
+    return tm, broker, alerts
+
+
+def test_acceptance_overnight_cnc_position_has_active_gtt(calendar):
+    from nseswing.orders.base import OrderType
+
+    tm, broker, _ = _rig(calendar)
+    after_close = pd.Timestamp("2026-11-03 15:30", tz="Asia/Kolkata")
+    tm.end_of_continuous_session("ACC", after_close)
+    pos = tm.positions["ACC"]
+    assert pos.plan.product == "CNC"
+    assert pos.stop_kind == "GTT" and pos.stop_order.is_open and pos.stop_order.order_type == OrderType.GTT
+    assert [o.order_type for o in broker.open_orders("ACC")] == [OrderType.GTT]  # the DAY SL expired
+    assert tm.overnight_compliance(after_close + pd.Timedelta(minutes=1)) == {"ACC": "GTT stop active"}
+
+
+def test_acceptance_overnight_flags_replace_sl_next_morning(calendar):
+    from nseswing.intraday.bars import Bar
+    from nseswing.orders.base import OrderType
+    from nseswing.trademanager import REPLACE_FLAG
+
+    tm, broker, alerts = _rig(calendar, trade_management={"overnight_stop": {"method": "replace_next_morning"}})
+    after_close = pd.Timestamp("2026-11-03 15:30", tz="Asia/Kolkata")
+    tm.end_of_continuous_session("ACC", after_close)
+    pos = tm.positions["ACC"]
+    assert REPLACE_FLAG in pos.flags and "REPLACE_SL" in alerts.kinds()
+    assert broker.open_orders("ACC") == []
+    assert tm.overnight_compliance(after_close).get("ACC", "").startswith("flagged: re-place SL")
+    # next morning at 09:15 the SL is re-placed and the flag cleared
+    open_ts = pd.Timestamp("2026-11-04 09:15", tz="Asia/Kolkata")
+    tm.start_of_session("ACC", calendar.session(open_ts.date()), Bar(open_ts, open_ts + pd.Timedelta(minutes=1), 502, 503, 501, 502.5, 1000))
+    assert REPLACE_FLAG not in pos.flags
+    assert [o.order_type for o in broker.open_orders("ACC")] == [OrderType.SL_M]
