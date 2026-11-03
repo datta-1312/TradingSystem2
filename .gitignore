@@ -1,0 +1,18 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+build/
+dist/
+
+# runtime data and secrets (never commit tokens)
+data/cache/
+data/state/
+data/logs/
+data/demo/
+data/reference/
+data/journal*.sqlite
+reports/
+.upstox_token*
+.env
