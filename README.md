@@ -52,10 +52,11 @@ The demo prints every rule as it fires, in IST:
 09:28 ZONE_APPROACH   within 1.0% of zone top ₹476.50: monitoring 1-min chart
 09:41 DIP_INTO_ZONE   dipped into zone … (low ₹472.90)
 09:42 TRIGGER         traded ₹477.05 > previous bar high ₹476.98 after dipping to ₹472.90
-09:42 PLAN            entry ≈₹477.05, stop ₹472.90 (day low), 1204 shares, ₹ risk 4996.60, 57.44% of account …
+09:42 PLAN            entry ≈₹477.05, stop ₹472.90 (day low), 524 shares, ₹ risk 2174.60, 25.00% of account …
+09:42 PLAN_WARNING    Position capped at 25% of equity: 1204 → 524 shares
 09:42 ENTRY_FILLED / STOP_PLACED (SL-M placed right after the fill)
-13:25 TARGET_PARTIAL  sold 397 @ ₹489.70 (+3.00R gross) [same-day: taxed as intraday]
-15:30 OVERNIGHT_GTT   GTT stop SELL 807 below ₹472.90 is active
+13:25 TARGET_PARTIAL  sold 172 @ ₹489.70 (+3.00R gross) [same-day: taxed as intraday]
+15:30 OVERNIGHT_GTT   GTT stop SELL 352 below ₹472.90 is active
 …     TRAIL_EXIT      daily close below the 9 EMA: sell the rest at the next open
 ```
 
@@ -199,7 +200,7 @@ described in `src/nseswing/data/csvstore.py`.
 
 ## Acceptance tests
 
-`python -m pytest` runs the whole suite (132 tests). The six acceptance cases from the brief live in
+`python -m pytest` runs the whole suite (133 tests). The six acceptance cases from the brief live in
 `tests/test_acceptance.py` and are checked exactly:
 
 | Case | Test | Result checked |
@@ -251,10 +252,11 @@ that shape results most:
 - **Hold-full hint:** the market is "strong" when the Nifty 50 closes above a rising
   21 EMA, and "cushions" means every other position is up ≥ 1R.
 
-Nothing outside the method is switched on by default. The optional extras are tagged
-`[OPTIONAL]` and are off: moving the stop to breakeven, a maximum position %, a
-no-new-entries time, provisional swing lows, and a cap on pullback depth. The one physical
-constraint that is always on is that CNC buys are capped by available cash.
+The optional extras are tagged `[OPTIONAL]`. One is switched on: **a position is capped at
+25% of equity** (`risk.max_position_pct: 25`). When the cap binds, the share count is cut and
+the ₹ risk falls below the 0.5% budget, and the plan says so. The others are off: moving the
+stop to breakeven, a no-new-entries time, provisional swing lows, and a cap on pullback depth.
+The one physical constraint that is always on is that CNC buys are capped by available cash.
 
 ## Facts that changed or that the brief did not mention
 
@@ -346,7 +348,7 @@ src/nseswing/
   journal.py  alerts.py  plancard.py  charts.py  synthetic.py  cli.py
 app/streamlit_app.py   dashboard
 scripts/config_reference.py   regenerates the reference below
-tests/       132 tests; fixtures/ are hand-written payloads (fictional symbols)
+tests/       133 tests; fixtures/ are hand-written payloads (fictional symbols)
 ```
 
 ## Configuration reference
@@ -599,7 +601,7 @@ _Generated from `config/settings.yaml` by `python scripts/config_reference.py`. 
 | `risk.max_stop_pct_warn` | `3.0` | Stage 3.2: warn (do not block) above this |
 | `risk.typical_stop_pct_min` | `2.5` | shown as information when the stop is tighter than the usual 2.5–3% |
 | `risk.cap_to_available_cash` | `true` | CNC has no leverage: shares are capped by available cash |
-| `risk.max_position_pct` | `null` | [OPTIONAL] cap position value as % of equity |
+| `risk.max_position_pct` | `25` | [OPTIONAL] cap position value as % of equity (null = no cap) |
 
 #### `targets`
 

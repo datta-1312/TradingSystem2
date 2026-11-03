@@ -228,7 +228,7 @@ risk:
   max_stop_pct_warn: 3.0           # Stage 3.2: warn (do not block) above this
   typical_stop_pct_min: 2.5        # shown as information when the stop is tighter than the usual 2.5–3%
   cap_to_available_cash: true      # CNC has no leverage: shares are capped by available cash
-  max_position_pct: null           # [OPTIONAL] cap position value as % of equity
+  max_position_pct: 25             # [OPTIONAL] cap position value as % of equity (null = no cap)
 
 targets:
   r_multiples: [1, 3, 5]           # Stage 4.1 targets shown on every plan

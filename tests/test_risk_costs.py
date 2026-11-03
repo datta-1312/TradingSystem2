@@ -25,11 +25,23 @@ def test_wide_stop_warns_but_does_not_block(rc):
     assert p.shares == 250 and any("wider than" in w for w in p.warnings)
 
 
-def test_tight_stop_is_information_and_cash_caps_size(rc):
-    p = rc.plan("X", D("500"), D("498.50"))  # 0.3% stop → 3,333 shares wanted = ₹16.7 L
+def test_tight_stop_is_information_and_cash_caps_size():
+    no_cap = RiskCalculator(load_settings(overrides={"risk": {"max_position_pct": None}}))
+    p = no_cap.plan("X", D("500"), D("498.50"))  # 0.3% stop → 3,333 shares wanted = ₹16.7 L
     assert p.shares == 2000  # ₹10,00,000 of cash / ₹500
     assert any("capped by available cash" in w for w in p.warnings)
     assert any("tighter than" in i for i in p.info)
+
+
+def test_position_capped_at_max_position_pct(rc, settings):
+    assert settings.risk.max_position_pct == D("25")
+    p = rc.plan("X", D("500"), D("495"))  # 1% stop → 1,000 shares = ₹5,00,000 (50%) wanted
+    assert p.shares == 500  # 25% of ₹10,00,000 / ₹500
+    assert p.position_value == D("250000.00") and p.position_pct == D("25.00")
+    assert p.planned_loss == D("2500.00") and p.planned_loss < p.max_loss  # risk falls below the 0.5% budget
+    assert any("capped at 25% of equity: 1000 → 500 shares" in w for w in p.warnings)
+    # a plan already under the cap is untouched (the acceptance example is 20%)
+    assert rc.plan("X", D("500.00"), D("487.50")).shares == 400
 
 
 def test_no_position_when_risk_exceeds_budget():
