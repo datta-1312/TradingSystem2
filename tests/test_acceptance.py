@@ -90,3 +90,47 @@ def test_acceptance_no_trigger_when_price_drops_through_zone(calendar, settings)
     assert eng.signal is None
     assert eng.zones[0].broken
     assert any(e.kind == "zone_broken" for e in eng.events)
+
+
+# ------------------------------------------------------------------ 1. position size (Stage 3)
+def test_acceptance_position_size(settings):
+    from decimal import Decimal as D
+
+    from nseswing.core.money import format_inr
+    from nseswing.risk import RiskCalculator
+
+    p = RiskCalculator(settings).plan("ACC", D("500.00"), D("487.50"))
+    assert p.equity == D("1000000") and p.risk_pct == D("0.5")
+    assert p.risk_per_share == D("12.50")
+    assert p.max_loss == D("5000.00") and format_inr(p.max_loss, 0) == "₹5,000"
+    assert p.shares == 400
+    assert p.position_value == D("200000.00") and format_inr(p.position_value, 0) == "₹2,00,000"
+    assert p.position_pct == D("20.00")
+    assert p.stop_pct == D("2.50")
+
+
+# ------------------------------------------------------------------ 2. R targets (Stage 4.1)
+def test_acceptance_r_targets_gross(settings):
+    from decimal import Decimal as D
+
+    from nseswing.risk import RiskCalculator
+
+    p = RiskCalculator(settings).plan("ACC", D("500.00"), D("487.50"))
+    assert p.r == D("12.50")  # 1R
+    assert p.targets["3R"] == D("537.50")
+    assert p.targets["5R"] == D("562.50")
+    # net of costs: the net target is above the gross one and the gross 3R nets less than 3R
+    assert p.net_targets["3R"] > p.targets["3R"] and p.net_r_at_target["3R"] < D("3")
+
+
+# ------------------------------------------------------------------ 5. tick rounding before sizing
+def test_acceptance_stop_rounded_to_tick_before_shares(settings):
+    from decimal import Decimal as D
+
+    from nseswing.risk import RiskCalculator
+
+    # ₹490.03 is not a valid price for a ₹500 stock (tick ₹0.05): it becomes ₹490.00 first.
+    p = RiskCalculator(settings).plan("ACC", D("500.00"), D("490.03"))
+    assert p.stop == D("490.00")
+    assert p.risk_per_share == D("10.00")
+    assert p.shares == 500  # unrounded risk ₹9.97 would have given 501 shares
