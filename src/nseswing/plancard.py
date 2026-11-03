@@ -24,7 +24,7 @@ def _rows(plan: "TradePlan") -> list[tuple[str, str]]:
     elif plan.is_draft:
         rows.append(("Trigger", f"after a dip into the zone, a trade above the previous bar's high (≈ ₹{plan.entry})"))
     rows.append(("Entry", f"₹{plan.entry}" + (" (estimate)" if plan.is_draft else "")))
-    rows.append(("Stop", f"₹{plan.stop}  [{plan.stop_method.replace('_', ' ')}]  distance {plan.stop_pct}%"))
+    rows.append(("Stop", f"₹{plan.stop}  [{plan.stop_basis}]  distance {plan.stop_pct}%"))
     rows.append(("Shares", f"{plan.shares:,}"))
     rows.append(("Risk", f"₹{plan.risk_per_share}/share × {plan.shares:,} = {format_inr(plan.planned_loss)} (budget {format_inr(plan.max_loss)} = {plan.risk_pct}% of {format_inr(plan.equity, 0)})"))
     rows.append(("Position", f"{format_inr(plan.position_value)} = {plan.position_pct}% of account"))

@@ -224,7 +224,7 @@ intraday:
 
 risk:
   stop_method: day_low             # day_low | trigger_bar_low | prior_bar_low  (Stage 3.1)
-  stop_buffer_ticks: 0             # [OPTIONAL] place the stop N ticks below the chosen low
+  stop_buffer_ticks: 1             # [OPTIONAL] place the stop N ticks below the chosen low (0 = at the low)
   max_stop_pct_warn: 3.0           # Stage 3.2: warn (do not block) above this
   typical_stop_pct_min: 2.5        # shown as information when the stop is tighter than the usual 2.5–3%
   cap_to_available_cash: true      # CNC has no leverage: shares are capped by available cash

@@ -67,11 +67,17 @@ def test_choose_stop_methods(rc, settings):
     trig = Bar(t0, t0 + pd.Timedelta(minutes=1), 496.8, 497.4, 496.33, 497.2, 1)
     zone = Zone("X", D("494"), D("498"), [Level("avwap", 496.0, "AVWAP")], "low")
     sig = TriggerSignal("X", zone, t0, D("497.05"), D("497.05"), trig, prior, day_low=494.57, dip_low=494.57, valid=True)
-    assert rc.choose_stop(sig, D("0.05"), "day_low")[0] == D("494.55")
-    assert rc.choose_stop(sig, D("0.05"), "trigger_bar_low")[0] == D("496.30")
-    assert rc.choose_stop(sig, D("0.05"), "prior_bar_low")[0] == D("495.10")
+    assert settings.risk.stop_buffer_ticks == 1  # one tick below the chosen low
+    assert rc.choose_stop(sig, D("0.05"), "day_low")[0] == D("494.50")  # low ₹494.57 → ₹494.55 → − 1 tick
+    assert rc.choose_stop(sig, D("0.05"), "trigger_bar_low")[0] == D("496.25")
+    assert rc.choose_stop(sig, D("0.05"), "prior_bar_low")[0] == D("495.05")
     plan = rc.plan_from_signal(sig, D("0.05"))
-    assert plan.stop == D("494.55") and plan.stop_method == "day_low" and plan.trigger_price == D("497.05")
+    assert plan.stop == D("494.50") and plan.stop_method == "day_low" and plan.trigger_price == D("497.05")
+    assert plan.stop_basis == "day low ₹494.55 − 1 tick"
+    # with no buffer the stop sits at the (tick-rounded) low itself
+    at_low = RiskCalculator(load_settings(overrides={"risk": {"stop_buffer_ticks": 0}}))
+    assert at_low.choose_stop(sig, D("0.05"), "day_low")[0] == D("494.55")
+    assert at_low.plan_from_signal(sig, D("0.05")).stop_basis == "day low"
 
 
 def test_lower_circuit_worst_case(rc):

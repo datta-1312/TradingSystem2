@@ -71,10 +71,20 @@ class TradePlan:
     flags: list[str] = field(default_factory=list)
     is_draft: bool = False
     created_at: datetime | None = None
+    stop_buffer_ticks: int = 0  # ticks the stop sits below the chosen low (risk.stop_buffer_ticks)
 
     @property
     def r(self) -> Decimal:
         return self.risk_per_share
+
+    @property
+    def stop_basis(self) -> str:
+        """How the stop was chosen, e.g. ``day low ₹472.90 − 1 tick``."""
+        label = self.stop_method.replace("_", " ")
+        n = self.stop_buffer_ticks
+        if not n:
+            return label
+        return f"{label} ₹{self.stop + self.tick * n} − {n} tick{'s' if n != 1 else ''}"
 
 
 class RiskCalculator:
@@ -211,7 +221,7 @@ class RiskCalculator:
 
     def plan_from_signal(self, signal: "TriggerSignal", tick: Decimal, **kw) -> TradePlan:
         stop, raw, method = self.choose_stop(signal, tick)
-        return self.plan(
+        plan = self.plan(
             signal.symbol,
             signal.fill_reference,
             stop,
@@ -223,6 +233,8 @@ class RiskCalculator:
             created_at=signal.ts.to_pydatetime(),
             **kw,
         )
+        plan.stop_buffer_ticks = self.s.risk.stop_buffer_ticks
+        return plan
 
     def draft_plan(self, symbol: str, zone: "Zone", tick: Decimal, **kw) -> TradePlan:
         """Pre-market estimate: entry near the zone top, stop just under the zone.

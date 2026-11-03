@@ -51,7 +51,8 @@ def test_reference_replay_timings_and_levels(replay_1m):
     assert pd.Timestamp(trig.ts).strftime("%H:%M") == "09:42"
     plan = replay_1m.plan
     assert plan.trigger_price == D("477.05")  # 09:41 high ₹476.98 + 1 tick, on the ₹0.05 grid
-    assert plan.stop == D("472.90") and plan.stop_method == "day_low"
+    assert plan.stop == D("472.85") and plan.stop_method == "day_low"  # day low ₹472.90 − 1 tick buffer
+    assert plan.stop_basis == "day low ₹472.90 − 1 tick"
     assert {"ema9", "ema21", "avwap"} <= plan.zone.kinds
     assert _first(replay_1m, "PREOPEN_WATCH").message.startswith("expected open ₹485.76 (+1.20% gap")
     # 3R partial the same day, overnight GTT at 15:30

@@ -52,11 +52,11 @@ The demo prints every rule as it fires, in IST:
 09:28 ZONE_APPROACH   within 1.0% of zone top ₹476.50: monitoring 1-min chart
 09:41 DIP_INTO_ZONE   dipped into zone … (low ₹472.90)
 09:42 TRIGGER         traded ₹477.05 > previous bar high ₹476.98 after dipping to ₹472.90
-09:42 PLAN            entry ≈₹477.05, stop ₹472.90 (day low), 524 shares, ₹ risk 2174.60, 25.00% of account …
-09:42 PLAN_WARNING    Position capped at 25% of equity: 1204 → 524 shares
+09:42 PLAN            entry ≈₹477.05, stop ₹472.85 (day low ₹472.90 − 1 tick), 524 shares, ₹ risk 2200.80, 25.00% of account …
+09:42 PLAN_WARNING    Position capped at 25% of equity: 1190 → 524 shares
 09:42 ENTRY_FILLED / STOP_PLACED (SL-M placed right after the fill)
-13:25 TARGET_PARTIAL  sold 172 @ ₹489.70 (+3.00R gross) [same-day: taxed as intraday]
-15:30 OVERNIGHT_GTT   GTT stop SELL 352 below ₹472.90 is active
+13:26 TARGET_PARTIAL  sold 172 @ ₹489.85 (+3.00R gross) [same-day: taxed as intraday]
+15:30 OVERNIGHT_GTT   GTT stop SELL 352 below ₹472.85 is active
 …     TRAIL_EXIT      daily close below the 9 EMA: sell the rest at the next open
 ```
 
@@ -150,7 +150,7 @@ described in `src/nseswing/data/csvstore.py`.
 
 | Rule | Code | Settings |
 |---|---|---|
-| 1. Stop: day low, trigger-bar low or prior-bar low | `RiskCalculator.choose_stop` | `risk.stop_method` |
+| 1. Stop: day low, trigger-bar low or prior-bar low (placed 1 tick below it) | `RiskCalculator.choose_stop` | `risk.stop_method`, `risk.stop_buffer_ticks` |
 | 2. Target 2.5–3%; warn (never block) when wider | `RiskCalculator.plan` | `risk.max_stop_pct_warn` |
 | 3. 0.5% account risk | `RiskCalculator.plan` | `account.risk_per_trade_pct` |
 | 4. Round entry and stop to ticks, then risk/share, then shares (floor), position, % | `RiskCalculator.plan`, `core/ticks.py` | `ticks.*` |
@@ -252,10 +252,16 @@ that shape results most:
 - **Hold-full hint:** the market is "strong" when the Nifty 50 closes above a rising
   21 EMA, and "cushions" means every other position is up ≥ 1R.
 
-The optional extras are tagged `[OPTIONAL]`. One is switched on: **a position is capped at
-25% of equity** (`risk.max_position_pct: 25`). When the cap binds, the share count is cut and
-the ₹ risk falls below the 0.5% budget, and the plan says so. The others are off: moving the
-stop to breakeven, a no-new-entries time, provisional swing lows, and a cap on pullback depth.
+The optional extras are tagged `[OPTIONAL]`. Two are switched on:
+
+- **Positions are capped at 25% of equity** (`risk.max_position_pct: 25`). When the cap binds,
+  the share count is cut and the ₹ risk falls below the 0.5% budget, and the plan says so.
+- **Stops sit 1 tick below the chosen low** (`risk.stop_buffer_ticks: 1`), so an exact retest of
+  the low does not trigger the stop. The plan shows it as, for example, "day low ₹472.90 − 1 tick".
+  A stop you enter yourself (`nseswing plan --stop`) is used as given.
+
+The others are off: moving the stop to breakeven, a no-new-entries time, provisional swing lows,
+and a cap on pullback depth.
 The one physical constraint that is always on is that CNC buys are capped by available cash.
 
 ## Facts that changed or that the brief did not mention
@@ -597,7 +603,7 @@ _Generated from `config/settings.yaml` by `python scripts/config_reference.py`. 
 | Key | Default | Meaning / assumption |
 |---|---|---|
 | `risk.stop_method` | `day_low` | day_low / trigger_bar_low / prior_bar_low  (Stage 3.1) |
-| `risk.stop_buffer_ticks` | `0` | [OPTIONAL] place the stop N ticks below the chosen low |
+| `risk.stop_buffer_ticks` | `1` | [OPTIONAL] place the stop N ticks below the chosen low (0 = at the low) |
 | `risk.max_stop_pct_warn` | `3.0` | Stage 3.2: warn (do not block) above this |
 | `risk.typical_stop_pct_min` | `2.5` | shown as information when the stop is tighter than the usual 2.5–3% |
 | `risk.cap_to_available_cash` | `true` | CNC has no leverage: shares are capped by available cash |

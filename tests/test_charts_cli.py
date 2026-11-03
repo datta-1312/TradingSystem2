@@ -32,7 +32,7 @@ def test_daily_chart_has_every_annotation(replay):
     assert {"EMA9", "EMA21", "EMA50", "Swing highs", "Swing lows", "AVWAP anchor"} <= _names(fig)
     assert any(n.startswith("AVWAP from") for n in _names(fig))
     text = _texts(fig)
-    for needle in ("MEDIUM zone", "Entry ₹477.05", "Stop ₹472.90", "3R ₹489.50", "5R ₹497.80", "higher low"):
+    for needle in ("MEDIUM zone", "Entry ₹477.05", "Stop ₹472.85", "3R ₹489.65", "5R ₹498.05", "higher low"):
         assert needle in text, needle
     assert fig.layout.yaxis2.title.text is None  # volume is a separate row, not a second y-axis on the price plot
 

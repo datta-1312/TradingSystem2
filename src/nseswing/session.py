@@ -203,7 +203,7 @@ class SessionEngine:
         self.plans[ctx.symbol] = plan
         self.alerts.emit(
             "PLAN", ctx.symbol,
-            f"entry ≈₹{plan.entry}, stop ₹{plan.stop} ({plan.stop_method.replace('_', ' ')}), {plan.shares} shares, "
+            f"entry ≈₹{plan.entry}, stop ₹{plan.stop} ({plan.stop_basis}), {plan.shares} shares, "
             f"₹ risk {plan.planned_loss}, {plan.position_pct}% of account, stop {plan.stop_pct}%, 3R ₹{plan.targets.get('3R')}, 5R ₹{plan.targets.get('5R')}",
             ts=sig.ts,
         )
