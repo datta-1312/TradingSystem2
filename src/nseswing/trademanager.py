@@ -358,3 +358,48 @@ class TradeManager:
             reasons.append("no other open positions")
         return strong and cushions, reasons
 
+
+
+# ------------------------------------------------------------------ persistence (paper trading across sessions)
+def save_positions(tm: TradeManager, path) -> None:
+    import json
+    from pathlib import Path
+
+    rows = []
+    for p in tm.positions.values():
+        rows.append(
+            {
+                "symbol": p.symbol, "trade_id": p.trade_id, "entry_time": p.entry_time.isoformat(), "entry_price": str(p.entry_price),
+                "qty_initial": p.qty_initial, "qty_open": p.qty_open, "initial_stop": str(p.initial_stop), "stop": str(p.stop),
+                "tick": str(p.tick), "cas_stock": p.cas_stock, "settle_date": p.settle_date.isoformat(),
+                "targets": {k: str(v) for k, v in p.targets.items()}, "stop_order_id": p.stop_order.order_id if p.stop_order else None,
+                "stop_kind": p.stop_kind, "partials_done": sorted(p.partials_done), "hold_full": p.hold_full,
+                "first_target_reached": p.first_target_reached, "pending_exit": p.pending_exit, "flags": sorted(p.flags),
+                "status": p.status, "theme": p.plan.theme,
+            }
+        )
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    Path(path).write_text(json.dumps(rows, indent=1), encoding="utf-8")
+
+
+def load_positions(tm: TradeManager, path, risk) -> None:
+    import json
+    from pathlib import Path
+
+    p = Path(path)
+    if not p.exists():
+        return
+    for r in json.loads(p.read_text(encoding="utf-8")):
+        if r["status"] != "open":
+            continue
+        plan = risk.plan(r["symbol"], Decimal(r["entry_price"]), Decimal(r["initial_stop"]), tick=Decimal(r["tick"]), theme=r.get("theme", ""))
+        pos = Position(
+            r["symbol"], plan, r["trade_id"], pd.Timestamp(r["entry_time"]), Decimal(r["entry_price"]), r["qty_initial"], r["qty_open"],
+            Decimal(r["initial_stop"]), Decimal(r["stop"]), Decimal(r["tick"]), r["cas_stock"], date.fromisoformat(r["settle_date"]),
+            targets={k: Decimal(v) for k, v in r["targets"].items()}, stop_kind=r["stop_kind"], partials_done=set(r["partials_done"]),
+            hold_full=r["hold_full"], first_target_reached=r["first_target_reached"], pending_exit=r["pending_exit"], flags=set(r["flags"]),
+        )
+        oid = r.get("stop_order_id")
+        orders = getattr(tm.broker, "orders", {})
+        pos.stop_order = orders.get(oid) if oid else None
+        tm.positions[pos.symbol] = pos

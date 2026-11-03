@@ -187,3 +187,150 @@ def intraday_path(
         rows.append([o, hi, lo, c, volume_per_min * (0.6 + rng.rand())])
     idx = pd.date_range(start, periods=n, freq="1min")
     return pd.DataFrame(rows, index=idx, columns=["open", "high", "low", "close", "volume"]).round(2)
+
+
+# ------------------------------------------------------------------ the reference replay scenario
+@dataclass
+class Scenario:
+    """Synthetic data for one replay: daily history + 1-min bars for the replay day (+ later daily bars)."""
+
+    symbol: str
+    day: date
+    daily: pd.DataFrame
+    intraday: dict[date, pd.DataFrame]
+    description: str
+    zone_top: float = 0.0
+    zone_bottom: float = 0.0
+
+
+def _bar_row(o: float, h: float, lo: float, c: float, v: float) -> list[float]:
+    return [round(o, 2), round(max(h, o, c), 2), round(min(lo, o, c), 2), round(c, 2), v]
+
+
+def _intraday_frame(day: date, rows: dict[str, list[float]]) -> pd.DataFrame:
+    idx = [pd.Timestamp(f"{day} {t}", tz=IST) for t in rows]
+    return pd.DataFrame(list(rows.values()), index=pd.DatetimeIndex(idx), columns=["open", "high", "low", "close", "volume"])
+
+
+def _history(settings, calendar: NSECalendar, day: date, symbol: str, seed: int):
+    from nseswing.levels import best_zone, build_level_map
+    from nseswing.screener import find_consolidation
+
+    hist_dates = session_dates(calendar, calendar.previous_trading_day(day), 300)
+    hist = daily_from_profile(leader(symbol, base=300.0, seed=seed), hist_dates)
+    lm = build_level_map(symbol, hist, settings, find_consolidation(hist, settings))
+    return hist, best_zone(lm.zones)
+
+
+def _following_days(calendar: NSECalendar, day: date, closes: list[float], start_open: float) -> pd.DataFrame:
+    rows, idx, prev = [], [], start_open
+    d = day
+    for c in closes:
+        d = calendar.next_trading_day(d)
+        o = prev * 1.002
+        rows.append(_bar_row(o, max(o, c) * 1.006, min(o, c) * 0.995, c, 1_400_000.0))
+        idx.append(pd.Timestamp(d))
+        prev = c
+    df = pd.DataFrame(rows, index=pd.DatetimeIndex(idx), columns=["open", "high", "low", "close", "volume"])
+    df.index.name = "date"
+    return df
+
+
+def reference_scenario(settings, calendar: NSECalendar, day: date, symbol: str = "REFDEMO.SYN", seed: int = 21) -> Scenario:
+    """Gap up, pullback into a moving-average + AVWAP zone, a 1-min bar breaks the prior bar's high, rally to 3R.
+
+    Following sessions reach 5R, stretch, then close below the 9 EMA (trailing exit).
+    """
+    hist, zone = _history(settings, calendar, day, symbol, seed)
+    top, bottom = float(zone.top), float(zone.bottom)
+    width = top - bottom
+    prev_close = float(hist["close"].iloc[-1])
+    open_px = round(prev_close * 1.012, 2)
+    rng = np.random.RandomState(seed)
+
+    rows: dict[str, list[float]] = {}
+    t0 = datetime.combine(day, time(9, 15))
+    # 09:15–09:39: drift from the gap-up open down toward the zone, staying above it
+    approach = top * 1.002
+    for i in range(25):
+        a = open_px + (approach - open_px) * i / 25
+        b = open_px + (approach - open_px) * (i + 1) / 25
+        w = 0.0005 * rng.rand() * a
+        rows[(t0 + timedelta(minutes=i)).strftime("%H:%M")] = _bar_row(a, max(a, b) + w, min(a, b) - w * 0.5, b, 9000 - 200 * i)
+    flush_high = top * 1.001
+    dip_low = bottom + 0.25 * width
+    rows["09:40"] = _bar_row(approach, approach * 1.0004, top * 1.0002, top * 1.0006, 6500)
+    rows["09:41"] = _bar_row(top * 1.0006, flush_high, dip_low, bottom + 0.4 * width, 14000)  # red flush into the zone
+    reversal_high = flush_high * 1.0025
+    rows["09:42"] = _bar_row(bottom + 0.4 * width, reversal_high, bottom + 0.38 * width, reversal_high * 0.9995, 16000)  # trades above 09:41's high
+    entry = flush_high + 0.05
+    r = entry - dip_low
+    path = [("09:43", reversal_high), ("11:00", entry + 1.2 * r), ("12:30", entry + 2.2 * r), ("13:45", entry + 3.4 * r), ("15:29", entry + 3.1 * r)]
+    t = datetime.combine(day, time(9, 43))
+    end = datetime.combine(day, time(15, 30))
+    k, prev = 0, reversal_high * 0.9995
+    while t < end:
+        hhmm = t.strftime("%H:%M")
+        while k + 1 < len(path) and hhmm >= path[k + 1][0]:
+            k += 1
+        (ta, pa), (tb, pb) = path[k], path[min(k + 1, len(path) - 1)]
+        ma = datetime.combine(day, time.fromisoformat(ta))
+        mb = datetime.combine(day, time.fromisoformat(tb))
+        frac = 1.0 if mb == ma else min(1.0, (t - ma) / (mb - ma))
+        target = pa + (pb - pa) * frac
+        c = target * (1 + rng.normal(0, 0.0004))
+        w = 0.0004 * rng.rand() * c
+        rows[hhmm] = _bar_row(prev, max(prev, c) + w, max(min(prev, c) - w, entry - 0.4 * r), c, 4000 + 3000 * rng.rand())
+        prev = c
+        t += timedelta(minutes=1)
+    intraday = _intraday_frame(day, rows)
+
+    day_bar = pd.DataFrame(
+        [[intraday["open"].iloc[0], intraday["high"].max(), intraday["low"].min(), intraday["close"].iloc[-1], intraday["volume"].sum()]],
+        index=pd.DatetimeIndex([pd.Timestamp(day)]),
+        columns=["open", "high", "low", "close", "volume"],
+    )
+    c0 = float(day_bar["close"].iloc[0])
+    after = [c0 + 1.9 * r, entry + 5.6 * r, entry + 6.1 * r, entry + 5.8 * r, entry + 3.0 * r, entry + 2.6 * r]
+    following = _following_days(calendar, day, after, c0)
+    daily = pd.concat([hist, day_bar, following])
+    daily.index.name = "date"
+    desc = (
+        f"{symbol}: prior close ₹{prev_close:.2f}; zone ₹{bottom:.2f}–₹{top:.2f} ({zone.describe()}); "
+        f"gap-up open ₹{open_px:.2f}; 1-min flush to ₹{dip_low:.2f} at 09:41; 09:42 trades above ₹{flush_high:.2f}; "
+        "rally into 3R the same day, 5R the next sessions, then a close below the 9 EMA"
+    )
+    return Scenario(symbol, day, daily, {day: intraday}, desc, top, bottom)
+
+
+def breakdown_scenario(settings, calendar: NSECalendar, day: date, symbol: str = "BRKDEMO.SYN", seed: int = 22) -> Scenario:
+    """Gap up, then a straight fall through every zone with no rebound bar: no trade, zones broken."""
+    hist, zone = _history(settings, calendar, day, symbol, seed)
+    top = float(zone.top)
+    prev_close = float(hist["close"].iloc[-1])
+    open_px = prev_close * 1.01
+    floor_px = prev_close * 0.86
+    rows: dict[str, list[float]] = {}
+    t = datetime.combine(day, time(9, 15))
+    n = 375
+    for i in range(n):
+        a = open_px + (floor_px - open_px) * i / n
+        b = open_px + (floor_px - open_px) * (i + 1) / n
+        rows[t.strftime("%H:%M")] = _bar_row(a, a, b, b, 6000)  # every bar: lower high, lower low, closes at its low
+        t += timedelta(minutes=1)
+    intraday = _intraday_frame(day, rows)
+    day_bar = pd.DataFrame(
+        [[intraday["open"].iloc[0], intraday["high"].max(), intraday["low"].min(), intraday["close"].iloc[-1], intraday["volume"].sum()]],
+        index=pd.DatetimeIndex([pd.Timestamp(day)]),
+        columns=["open", "high", "low", "close", "volume"],
+    )
+    daily = pd.concat([hist, day_bar])
+    daily.index.name = "date"
+    return Scenario(symbol, day, daily, {day: intraday}, f"{symbol}: gap up to ₹{open_px:.2f}, then falls through the ₹{top:.2f} zone and below without a rebound", top, float(zone.bottom))
+
+
+def write_scenario(store, scenario: Scenario) -> None:
+    """Save a scenario into a CsvStore so the CLI / dashboard replay can read it like real data."""
+    store.write_daily(scenario.symbol, scenario.daily)
+    for d, df in scenario.intraday.items():
+        store.write_intraday(scenario.symbol, d, df)

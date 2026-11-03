@@ -202,6 +202,36 @@ class TriggerEngine:
                 self.dip_low = bar.low
                 self._emit(bar.start, "dip", f"dipped into zone {nz.describe()} (low ₹{bar.low:.2f})", bar.low)
 
+    # ------------------------------------------------------------------ intrabar evaluation on 1-min bars (5/15-min charts)
+    def check_intrabar(self, forming: Bar, minute: Bar) -> list[TriggerEvent]:
+        """Watch the 5- or 15-minute chart one minute at a time.
+
+        ``forming`` is the monitored-timeframe bar built so far; ``minute`` is the
+        newest 1-minute bar inside it. The trigger level is still the previous
+        *completed* monitored bar's high, so a 5-min setup can fire mid-bar.
+        """
+        start = len(self.events)
+        if self.state in (State.DONE, State.TRIGGERED) or not self.session.is_continuous(minute.start, self.cas_stock):
+            return []
+        z = self.zone
+        assert z is not None
+        self.day_low = minute.low if self.day_low is None else min(self.day_low, minute.low)
+        level = self.trigger_level()
+        if self.state in (State.WAITING, State.APPROACH):
+            if minute.low <= float(z.top):
+                self.state, self.dip_low = State.ARMED, minute.low
+                self._emit(minute.start, "dip", f"dipped into zone {z.describe()} (low ₹{minute.low:.2f})", minute.low)
+                if minute.close >= minute.open and level is not None and minute.high >= float(level):
+                    self._fire(forming, level, fill_price=max(level, round_to_tick(minute.open, self.tick, "up")), ts=minute.start)
+            elif self.state == State.WAITING and minute.low <= float(z.top) * (1 + self.cfg.approach_pct / 100):
+                self.state = State.APPROACH
+                self._emit(minute.start, "approach", f"within {self.cfg.approach_pct}% of zone top ₹{z.top}: monitoring {self.cfg.timeframe_minutes}-min chart", minute.low)
+            return self.events[start:]
+        self.dip_low = min(self.dip_low or minute.low, minute.low)
+        if level is not None and minute.high >= float(level):
+            self._fire(forming, level, fill_price=max(level, round_to_tick(minute.open, self.tick, "up")), ts=minute.start)
+        return self.events[start:]
+
     # ------------------------------------------------------------------ intrabar evaluation (live ticks)
     def on_price(self, ts: datetime, price: float) -> list[TriggerEvent]:
         """Live tick: arm on entry into the zone, fire on the first trade above the previous bar's high."""
@@ -221,32 +251,33 @@ class TriggerEngine:
             if level is not None and price >= float(level):
                 t = to_ist(ts)
                 forming = Bar(t, t, price, price, min(price, self.dip_low), price, 0.0)
-                self._fire(forming, level, fill_price=to_decimal(price))
+                self._fire(forming, level, fill_price=to_decimal(price), ts=t)
         if self.state == State.ARMED and self.cfg.zone_break.rule == "trade_below":
             t = to_ist(ts)
             self._check_breaks(Bar(t, t, price, price, price, price, 0.0), price)
         return self.events[start:]
 
     # ------------------------------------------------------------------ firing and validation
-    def _fire(self, bar: Bar, level: Decimal, fill_price: Decimal | None = None) -> None:
+    def _fire(self, bar: Bar, level: Decimal, fill_price: Decimal | None = None, ts: pd.Timestamp | None = None) -> None:
         z = self.zone
         assert z is not None
         prior = self.bars[-1]
+        when = to_ist(ts) if ts is not None else to_ist(bar.start)
         fill = fill_price if fill_price is not None else max(level, round_to_tick(bar.open, self.tick, "up"))
-        reasons = self._validate(bar, level, z)
+        reasons = self._validate(bar, level, z, when)
         dip_low = min(self.dip_low if self.dip_low is not None else bar.low, bar.low)
         day_low = min(self.day_low if self.day_low is not None else bar.low, bar.low)
-        sig = TriggerSignal(self.symbol, z, to_ist(bar.start), level, fill, bar, prior, day_low, dip_low, not reasons, reasons)
+        sig = TriggerSignal(self.symbol, z, when, level, fill, bar, prior, day_low, dip_low, not reasons, reasons)
         if reasons:
-            self._emit(bar.start, "invalid_trigger", f"traded above previous bar high ₹{prior.high:.2f} but INVALID: {'; '.join(reasons)}", float(level))
+            self._emit(when, "invalid_trigger", f"traded above previous bar high ₹{prior.high:.2f} but INVALID: {'; '.join(reasons)}", float(level))
             self.state = State.DONE if any("Stage 1" in r or "session" in r or "entries" in r or "after" in r for r in reasons) else State.WAITING
             return
         self.signal = sig
         self.entries += 1
         self.state = State.TRIGGERED
-        self._emit(bar.start, "trigger", f"traded ₹{level} > previous bar high ₹{prior.high:.2f} after dipping to ₹{dip_low:.2f} in zone ₹{z.bottom}–₹{z.top}", float(level))
+        self._emit(when, "trigger", f"traded ₹{level} > previous bar high ₹{prior.high:.2f} after dipping to ₹{dip_low:.2f} in zone ₹{z.bottom}–₹{z.top}", float(level))
 
-    def _validate(self, bar: Bar, level: Decimal, z: Zone) -> list[str]:
+    def _validate(self, bar: Bar, level: Decimal, z: Zone, when: pd.Timestamp) -> list[str]:
         reasons = []
         if not self.stage1_pass:
             reasons.append("stock no longer passes the Stage 1 daily conditions")
@@ -256,10 +287,10 @@ class TriggerEngine:
         max_px = float(z.top) * (1 + self.cfg.at_zone_max_distance_pct / 100)
         if float(level) > max_px:
             reasons.append(f"trigger ₹{level} is more than {self.cfg.at_zone_max_distance_pct}% above the zone (not at support)")
-        if not self.session.is_continuous(bar.start, self.cas_stock):
+        if not self.session.is_continuous(when, self.cas_stock):
             reasons.append("continuous session closed for this stock")
         cutoff = self.cfg.no_new_entries_after
-        if cutoff is not None and to_ist(bar.start).time() >= cutoff:
+        if cutoff is not None and to_ist(when).time() >= cutoff:
             reasons.append(f"after the no-new-entries time {cutoff:%H:%M}")
         if self.entries >= self.cfg.max_entries_per_symbol_per_day:
             reasons.append("max entries for this stock today already taken")

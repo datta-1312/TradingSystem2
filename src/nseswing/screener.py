@@ -46,7 +46,9 @@ class CheckResult:
     details: dict[str, Any] = field(default_factory=dict)
 
     def short(self) -> str:
-        return ("PASS" if self.passed else "FAIL") + f": {self.reason}"
+        if self.name.startswith("8"):  # for the disqualifier, passed=True means the stock IS disqualified
+            return self.reason if self.passed else f"not disqualified: {self.reason}"
+        return ("PASS" if self.passed else "FAIL") + f" {self.name}: {self.reason}"
 
 
 @dataclass
