@@ -1,0 +1,4 @@
+{"declines": 1, "advances": 1, "unchanged": 0, "data": [
+  {"metadata": {"symbol": "ALPHAIND", "identifier": "ALPHAINDEQN", "purpose": null, "lastPrice": 525.0, "change": 7.65, "pChange": 1.48, "previousClose": 517.35, "finalQuantity": 52000, "totalTurnover": 27300000, "marketCap": 0, "yearHigh": 560.0, "yearLow": 300.0, "iep": 525.0, "chartTodayPath": ""}, "detail": {"preOpenMarket": {}}},
+  {"metadata": {"symbol": "BETAPOWER", "identifier": "BETAPOWEREQN", "purpose": null, "lastPrice": 210.5, "change": -1.2, "pChange": -0.57, "previousClose": 211.7, "finalQuantity": 9000, "iep": 0, "chartTodayPath": ""}, "detail": {}}
+]}

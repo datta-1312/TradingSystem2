@@ -1,0 +1,6 @@
+[
+  {"symbol": "BETAPOWER", "series": "EQ", "faceVal": "2", "subject": "Face Value Split (Sub-Division) - From Rs 10/- Per Share To Rs 2/- Per Share", "exDate": "15-Jun-2026", "recDate": "15-Jun-2026", "comp": "Beta Power Limited", "isin": "INE000B01012"},
+  {"symbol": "DELTACHEM", "series": "EQ", "faceVal": "10", "subject": "Bonus 1:1", "exDate": "04-Aug-2026", "recDate": "04-Aug-2026", "comp": "Delta Chemicals Limited", "isin": "INE000D01014"},
+  {"symbol": "ALPHAIND", "series": "EQ", "faceVal": "1", "subject": "Interim Dividend - Rs 3 Per Share", "exDate": "21-Aug-2026", "recDate": "21-Aug-2026", "comp": "Alpha Industries Limited", "isin": "INE000A01010"},
+  {"symbol": "GAMMADEF", "series": "EQ", "faceVal": "5", "subject": "Annual General Meeting", "exDate": "-", "recDate": "-", "comp": "Gamma Defence Limited", "isin": "INE000G01016"}
+]

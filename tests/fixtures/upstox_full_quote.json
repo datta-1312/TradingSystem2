@@ -1,0 +1,19 @@
+{"status": "success", "data": {"NSE_EQ:ALPHAIND": {
+  "ohlc": {"open": 512.0, "high": 519.5, "low": 508.2, "close": 517.35},
+  "depth": {"buy": [{"quantity": 120, "price": 517.3, "orders": 3}], "sell": [{"quantity": 90, "price": 517.4, "orders": 2}]},
+  "timestamp": "2026-10-30T15:29:59.312+05:30",
+  "instrument_token": "NSE_EQ|INE000A01010",
+  "symbol": "ALPHAIND",
+  "last_price": 517.35,
+  "volume": 1834000,
+  "average_price": 514.2,
+  "oi": 0,
+  "net_change": 5.45,
+  "total_buy_quantity": 65000,
+  "total_sell_quantity": 71000,
+  "lower_circuit_limit": 460.75,
+  "upper_circuit_limit": 563.05,
+  "last_trade_time": "1793356199000",
+  "oi_day_high": 0,
+  "oi_day_low": 0
+}}}
